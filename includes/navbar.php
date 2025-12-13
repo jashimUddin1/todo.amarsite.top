@@ -1,7 +1,11 @@
   <nav class="navbar bg-info-subtle border-bottom">
     <div class="container d-flex justify-content-between align-items-center">
 
-      <a class="navbar-brand fw-semibold btn btn-secondary text-white" href="todo_list.php">Todo List</a>
+      <div class="d-flex align-items-center gap-2">
+        <a class="navbar-brand fw-semibold btn btn-secondary text-white" href="index.php">Daily Report</a>
+        <a class="btn btn-sm btn-outline-dark fw-semibold" href="todo_list.php">Todo List</a>
+        <a class="btn btn-sm btn-outline-dark fw-semibold" href="dashboard.php">Dashboard</a>
+      </div>
 
       <div class="d-flex align-items-center gap-2 yearNav">
         <!-- Prev -->
