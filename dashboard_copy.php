@@ -516,8 +516,5 @@ $allChecked = $hasAll;
 })();
 </script>
 
-
 </body>
 </html>
-
-

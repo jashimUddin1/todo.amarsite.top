@@ -45,10 +45,11 @@ if ($range === 'today') {
   $dateWhere = " AND report_date >= DATE_SUB(CURDATE(), INTERVAL 29 DAY) ";
 }
 
-// ===== Handle Edit POST =====
+// ===== Handle Edit POST (Row click => edit modal => submit) =====
 $flash = "";
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_entry') {
 
+  // New values
   $new_date   = trim($_POST['new_report_date'] ?? '');
   $new_start  = trim($_POST['new_start_time'] ?? '');
   $new_end    = trim($_POST['new_end_time'] ?? '');
@@ -57,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
   if ($new_duration_min < 0) $new_duration_min = 0;
   $new_duration = $new_duration_min . " min";
 
+  // Original key values (used to locate row)
   $old_date  = trim($_POST['old_report_date'] ?? '');
   $old_start = trim($_POST['old_start_time'] ?? '');
   $old_end   = trim($_POST['old_end_time'] ?? '');
@@ -85,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
         $desc, $old_date, $old_start, $old_end
       );
       if ($stmtU->execute()) {
-        $flash = "Updated successfully.";
+        $flash = ($stmtU->affected_rows >= 0) ? "Updated successfully." : "No changes applied.";
       } else {
         $flash = "Update failed: execute error.";
       }
@@ -93,7 +95,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
     }
   }
 
-  // Redirect to avoid resubmission
   $q = http_build_query([
     'desc' => $desc,
     'range' => $range,
@@ -137,7 +138,7 @@ while ($r = $res->fetch_assoc()) {
 
   $d = $r['report_date'] ?? null;
   if ($d) {
-    if ($lastDate === null) $lastDate = $d; // newest
+    if ($lastDate === null) $lastDate = $d; // newest (first in DESC)
     $firstDate = $d;                         // ends as oldest
   }
 }
@@ -177,6 +178,7 @@ function activeBtn($cur, $val){ return $cur === $val ? "btn-primary" : "btn-outl
       border-bottom: 1px solid rgba(148, 163, 184, .35);
     }
     a{ text-decoration:none; }
+
     table thead th{
       background: rgba(15, 23, 42, .95) !important;
       border-bottom: 2px solid rgba(148, 163, 184, .5);
@@ -221,6 +223,22 @@ function activeBtn($cur, $val){ return $cur === $val ? "btn-primary" : "btn-outl
       border: 1px solid rgba(148, 163, 184, .35);
       box-shadow: 0 18px 45px rgba(0,0,0,.65);
     }
+
+    /* ✅ FIX: table scroll stays inside the table section (py + px together) */
+    .table-scroll-box{
+      max-height: 65vh;             /* adjust: 55vh-75vh */
+      overflow: auto;               /* both vertical + horizontal in same box */
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, .20);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* sticky header while scrolling inside box */
+    .table-scroll-box thead th{
+      position: sticky;
+      top: 0;
+      z-index: 3;
+    }
   </style>
 </head>
 
@@ -249,15 +267,8 @@ function activeBtn($cur, $val){ return $cur === $val ? "btn-primary" : "btn-outl
       <div class="alert alert-info glass-card border-0"><?= h($flash) ?></div>
     <?php endif; ?>
 
-    <!-- ✅ Quick Filter Toggle (Default hidden) -->
-    <div class="d-flex justify-content-end mb-2">
-      <button type="button" id="toggleQuickFilterBtn" class="btn btn-sm btn-outline-light">
-        Show Quick Filter
-      </button>
-    </div>
-
-    <!-- ✅ Quick filter (Default hide) -->
-    <div class="glass-card p-3 mb-3 d-none" id="quickFilterBox">
+    <!-- Quick filter -->
+    <div class="glass-card p-3 mb-3">
       <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
         <div>
           <div class="text-dim small mb-1">Quick Filter</div>
@@ -323,6 +334,7 @@ function activeBtn($cur, $val){ return $cur === $val ? "btn-primary" : "btn-outl
       </div>
     </div>
 
+    
     <!-- Table -->
     <div class="glass-card p-3">
       <div class="d-flex justify-content-between align-items-center mb-2">
@@ -330,8 +342,9 @@ function activeBtn($cur, $val){ return $cur === $val ? "btn-primary" : "btn-outl
         <small class="text-dim">Tip: Row click → Edit</small>
       </div>
 
-      <div class="table-responsive">
-        <table class="table table-dark table-hover align-middle mb-0">
+      <!-- ✅ Updated: Scroll container for both X and Y -->
+      <div class="table-scroll-box">
+        <table class="table table-dark table-hover align-middle mb-0 text-nowrap">
           <thead>
             <tr>
               <th>Date</th>
@@ -365,6 +378,7 @@ function activeBtn($cur, $val){ return $cur === $val ? "btn-primary" : "btn-outl
               <tr class="click-row"
                   data-bs-toggle="modal"
                   data-bs-target="#editEntryModal"
+                  data-desc="<?= h($desc) ?>"
                   data-old-date="<?= h($rd) ?>"
                   data-old-start="<?= h($st) ?>"
                   data-old-end="<?= h($et) ?>"
@@ -400,6 +414,8 @@ function activeBtn($cur, $val){ return $cur === $val ? "btn-primary" : "btn-outl
           </tbody>
         </table>
       </div>
+      <!-- ✅ End scroll container -->
+
     </div>
 
   </div>
@@ -423,14 +439,14 @@ function activeBtn($cur, $val){ return $cur === $val ? "btn-primary" : "btn-outl
   </div>
 </div>
 
-<!-- Edit Entry Modal -->
+<!-- Edit Entry Modal (Row click) -->
 <div class="modal fade" id="editEntryModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-scrollable modal-lg">
     <div class="modal-content glass-card">
       <div class="modal-header border-0">
         <div>
           <h5 class="modal-title mb-0">Edit Entry</h5>
-          <div class="text-dim small">Save করলে DB update হবে</div>
+          <div class="text-dim small">Row click করে খুলেছে — Save করলে DB update হবে</div>
         </div>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
@@ -462,7 +478,7 @@ function activeBtn($cur, $val){ return $cur === $val ? "btn-primary" : "btn-outl
             <div class="col-md-4">
               <label class="form-label">Duration (minutes)</label>
               <input type="number" min="0" class="form-control" name="new_duration_min" id="new_duration_min" required>
-              <small class="text-dim">Save হলে DB তে “X min” হবে, UI তে hr/min দেখাবে।</small>
+              <small class="text-dim">Save হলে “X min” হিসেবে DB তে যাবে, UI তে hr/min দেখাবে।</small>
             </div>
 
             <div class="col-md-8">
@@ -477,7 +493,7 @@ function activeBtn($cur, $val){ return $cur === $val ? "btn-primary" : "btn-outl
           </div>
 
           <div class="text-dim small mt-2">
-            * Duplicate key থাকলে first row আপডেট হবে (LIMIT 1)।
+            * যদি একই task/date/time এ duplicate row থাকে, এই update শুধুমাত্র প্রথম ১টা row আপডেট করবে (LIMIT 1)।
           </div>
         </form>
       </div>
@@ -489,19 +505,7 @@ function activeBtn($cur, $val){ return $cur === $val ? "btn-primary" : "btn-outl
 
 <script>
 (function(){
-  // ✅ Quick Filter toggle (default hidden)
-  const box = document.getElementById('quickFilterBox');
-  const btn = document.getElementById('toggleQuickFilterBtn');
-  if (box && btn) {
-    btn.textContent = "Show Quick Filter";
-    btn.addEventListener('click', function(){
-      box.classList.toggle('d-none');
-      const isHidden = box.classList.contains('d-none');
-      btn.textContent = isHidden ? "Show Quick Filter" : "Hide Quick Filter";
-    });
-  }
-
-  // Read more modal
+  // Read more
   const readMoreModal = document.getElementById('readMoreModal');
   const readMoreText = document.getElementById('readMoreText');
 

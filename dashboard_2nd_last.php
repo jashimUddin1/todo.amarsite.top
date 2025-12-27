@@ -18,6 +18,10 @@ function format_hours($minutes)
 
 $today = date('Y-m-d');
 
+// ===== ISR filter (All/Running/Ended) =====
+$isr = $_GET['isr'] ?? 'all';
+$isr = in_array($isr, ['all', 'running', 'ended'], true) ? $isr : 'all';
+
 // ===== All descriptions for filter list =====
 $allDescriptions = [];
 $sqlDesc = "
@@ -33,7 +37,7 @@ if ($res = $con->query($sqlDesc)) {
   $res->free();
 }
 
-// ===== Read filter from GET =====
+// ===== Read task filter from GET =====
 // Accept: ?desc[]=All  OR ?desc[]=Task1&desc[]=Task2 ...
 $selected = isset($_GET['desc']) ? (array)$_GET['desc'] : ['All'];
 $selected = array_values(array_filter(array_map('trim', $selected), fn($v) => $v !== ''));
@@ -44,7 +48,7 @@ if (empty($selected)) {
   $selected = ['All'];
 }
 
-// Build filter SQL if not All
+// Build task filter SQL if not All
 $filterSql = "";
 $filterParams = [];
 if (!$hasAll) {
@@ -58,6 +62,14 @@ if (!$hasAll) {
     $filterParams = $validSelected;
     $selected = $validSelected;
   }
+}
+
+// ===== ISR filter SQL (based on report_date) =====
+$isrSql = "";
+if ($isr === 'running') {
+  $isrSql = " AND report_date = CURDATE() ";
+} elseif ($isr === 'ended') {
+  $isrSql = " AND report_date < CURDATE() ";
 }
 
 // ===== Overall summary (filtered if applied) =====
@@ -75,6 +87,7 @@ $sqlSummary = "
   FROM daily_reports
   WHERE duration IS NOT NULL AND duration <> ''
 ";
+$sqlSummary .= $isrSql;
 if (!$hasAll) $sqlSummary .= $filterSql;
 
 $stmt = $con->prepare($sqlSummary);
@@ -110,6 +123,7 @@ $sqlTasks = "
   WHERE description IS NOT NULL AND description <> ''
     AND duration IS NOT NULL AND duration <> ''
 ";
+$sqlTasks .= $isrSql;
 if (!$hasAll) $sqlTasks .= $filterSql;
 
 $sqlTasks .= "
@@ -143,6 +157,9 @@ if ($stmt2) {
 $grandMinutes   = (int)$summary['total_minutes'];
 $grandHoursText = format_hours($grandMinutes);
 $allChecked = $hasAll;
+
+// ISR label text
+$isrLabelText = ($isr === 'running') ? 'Running' : (($isr === 'ended') ? 'Ended' : 'All');
 ?>
 <!doctype html>
 <html lang="en" data-bs-theme="dark">
@@ -235,8 +252,10 @@ $allChecked = $hasAll;
       <?php if (!$hasAll && !empty($selected)): ?>
         <span class="badge bg-info text-dark ms-2">Filtered: <?= (int)count($selected) ?></span>
       <?php else: ?>
-        <span class="badge bg-secondary ms-2">All</span>
+        <span class="badge bg-secondary ms-2">All Tasks</span>
       <?php endif; ?>
+
+      <span class="badge bg-dark border ms-1">ISR: <?= htmlspecialchars($isrLabelText) ?></span>
     </div>
 
     <div class="right">
@@ -258,8 +277,8 @@ $allChecked = $hasAll;
     <div class="modal-content glass-card">
       <div class="modal-header border-0">
         <div>
-          <h5 class="modal-title mb-0">Filter by Task</h5>
-          <div class="text-dim small">Apply to cards + table</div>
+          <h5 class="modal-title mb-0">Filter</h5>
+          <div class="text-dim small">Task + ISR (Apply to cards + table)</div>
         </div>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
@@ -271,14 +290,35 @@ $allChecked = $hasAll;
           <div class="mb-3">
             <input type="text" id="taskSearch" class="form-control"
                    placeholder="Search task..." autocomplete="off">
-            <small class="text-dim">Type to filter the list inside this modal.</small>
+            <small class="text-dim">Search দিলে All শুধু visible গুলো select করবে।</small>
           </div>
 
-          <!-- All row -->
-          <div class="chk-row row-toggle" data-target="#chkAll">
-            <input class="form-check-input" type="checkbox" value="All" id="chkAll" name="desc[]"
-                   <?= $allChecked ? 'checked' : '' ?>>
-            <label class="form-check-label flex-grow-1 ms-2" for="chkAll">All</label>
+          <!-- ISR + All (ISR button sits LEFT of All) -->
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <div class="dropdown">
+              <button class="btn btn-sm btn-outline-info dropdown-toggle"
+                      type="button"
+                      id="isrDropdownBtn"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false">
+                ISR: <span id="isrLabel"><?= htmlspecialchars($isrLabelText) ?></span>
+              </button>
+              <ul class="dropdown-menu">
+                <li><a class="dropdown-item isr-item" href="#" data-value="all">All</a></li>
+                <li><a class="dropdown-item isr-item" href="#" data-value="running">Running</a></li>
+                <li><a class="dropdown-item isr-item" href="#" data-value="ended">Ended</a></li>
+              </ul>
+            </div>
+
+            <!-- hidden input for submit -->
+            <input type="hidden" name="isr" id="isrInput" value="<?= htmlspecialchars($isr) ?>">
+
+            <!-- All row -->
+            <div class="chk-row row-toggle flex-grow-1 mb-0" data-target="#chkAll" style="margin-bottom:0;">
+              <input class="form-check-input" type="checkbox" value="All" id="chkAll" name="desc[]"
+                     <?= $allChecked ? 'checked' : '' ?>>
+              <label class="form-check-label flex-grow-1 ms-2" for="chkAll">All</label>
+            </div>
           </div>
 
           <hr class="my-2">
@@ -361,7 +401,7 @@ $allChecked = $hasAll;
     <div class="glass-card p-3">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <h5 class="mb-0">Per Task Summary</h5>
-        <small class="text-dim">Days, hours, runs + start/end</small>
+        <small class="text-dim">Start/End + Days/Time/Runs</small>
       </div>
 
       <div class="table-responsive">
@@ -437,20 +477,22 @@ $allChecked = $hasAll;
   const taskSearch = document.getElementById('taskSearch');
   const taskRows = Array.from(document.querySelectorAll('.task-row'));
 
+  // ISR
+  const isrItems = document.querySelectorAll('.isr-item');
+  const isrLabel = document.getElementById('isrLabel');
+  const isrInput = document.getElementById('isrInput');
+
   function getActiveRows(){
-    // visible rows only
     return taskRows.filter(r => r.style.display !== 'none');
   }
 
   function getRelevantTaskChecks(){
     const q = (taskSearch?.value || '').trim();
     if (q) {
-      // search active → only visible tasks
       const visibleIds = new Set(getActiveRows().map(r => (r.getAttribute('data-target') || '').replace('#','')));
       return taskChecks.filter(c => visibleIds.has(c.id));
     }
-    // no search → all tasks
-    return taskChecks;
+    return taskChecks; // no search => all
   }
 
   function setChecks(list, state){
@@ -466,10 +508,11 @@ $allChecked = $hasAll;
     chkAll.checked = rel.every(x => x.checked);
   }
 
-  // ===== Row click toggles checkbox =====
+  // Row click toggles checkbox (row-তে ক্লিক করলেই toggle)
   rowToggles.forEach(row => {
     row.addEventListener('click', (e) => {
       const tag = e.target?.tagName?.toUpperCase();
+
       if (tag === 'INPUT') return;
       if (tag === 'LABEL') e.preventDefault();
 
@@ -484,40 +527,59 @@ $allChecked = $hasAll;
     });
   });
 
-  // ✅ All checkbox: search থাকলে শুধু visible গুলো, না থাকলে সবগুলো
+  // All checkbox: search থাকলে শুধু visible গুলো, না থাকলে সবগুলো
   chkAll?.addEventListener('change', function(){
     const rel = getRelevantTaskChecks();
     setChecks(rel, this.checked);
     syncAllCheckbox();
   });
 
-  // Task change: search active হলে visible set অনুযায়ী All sync হবে
+  // Task change: relevant সেট অনুযায়ী All sync
   taskChecks.forEach(c => {
     c.addEventListener('change', function(){
       syncAllCheckbox();
     });
   });
 
-  // ===== Search inside modal =====
+  // Search inside modal
   taskSearch?.addEventListener('input', function(){
     const q = (this.value || '').toLowerCase().trim();
     taskRows.forEach(r => {
       const t = (r.getAttribute('data-text') || '');
       r.style.display = (!q || t.includes(q)) ? '' : 'none';
     });
-
-    // search বদলালে All checkbox-ও relevant সেট অনুযায়ী sync
     syncAllCheckbox();
   });
 
+  // ISR init + click
+  const initVal = isrInput?.value || 'all';
+  isrItems.forEach(i => {
+    if (i.dataset.value === initVal) {
+      i.classList.add('active');
+      isrLabel.textContent = i.textContent.trim();
+    } else {
+      i.classList.remove('active');
+    }
+  });
+
+  isrItems.forEach(item => {
+    item.addEventListener('click', function(e){
+      e.preventDefault();
+      isrItems.forEach(i => i.classList.remove('active'));
+      this.classList.add('active');
+
+      const val = this.dataset.value;
+      const txt = this.textContent.trim();
+
+      isrLabel.textContent = txt;
+      isrInput.value = val;
+    });
+  });
+
   // initial sync
-  // (যদি server থেকে All selected আসে, search empty থাকলে সব checked থাকবে)
   syncAllCheckbox();
 })();
 </script>
 
-
 </body>
 </html>
-
-
