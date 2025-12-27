@@ -516,21 +516,6 @@ $RUNNING_TASK_ID = $runningAny ? (int) $runningAny['id'] : 0;
 
   <section class="py-4">
     <div class="container">
-      <div class="d-flex justify-content-between align-items-center gap-2 mb-3 flex-wrap">
-        <div class="flex-grow-1" style="min-width:240px; max-width:420px;">
-          <input type="text" id="taskSearch" class="form-control" placeholder="Search…" autocomplete="off">
-        </div>
-        <div style="min-width:220px;">
-          <select id="taskFilter" class="form-select">
-            <option value="all" selected>All</option>
-            <option value="pending">Pending</option>
-            <option value="done">Done</option>
-            <option value="p3">High Priority</option>
-            <option value="p2">Medium Priority</option>
-            <option value="p1">Low Priority</option>
-          </select>
-        </div>
-      </div>
       <div class="table-responsive mb-4">
         <table class="table table-dark table-bordered table-striped align-middle">
           <thead class="table-light text-dark">
@@ -565,13 +550,7 @@ $RUNNING_TASK_ID = $runningAny ? (int) $runningAny['id'] : 0;
                 $isOff = is_off_day_title($t['title']);
                 $offWorked = $isOff ? off_worked_effective($t, $con) : false;
                 ?>
-                <tr class="task-row"
-                    data-title="<?= htmlspecialchars($t['title'] ?? '', ENT_QUOTES) ?>"
-                    data-notes="<?= htmlspecialchars($t['notes'] ?? '', ENT_QUOTES) ?>"
-                    data-datefrom="<?= htmlspecialchars(($t['date_from_label'] ?? '') ?: ($t['date_from'] ?? ''), ENT_QUOTES) ?>"
-                    data-dateto="<?= htmlspecialchars(($t['date_to_label'] ?? '') ?: ($t['date_to'] ?? ''), ENT_QUOTES) ?>"
-                    data-priority="<?= (int)($t['priority'] ?? 0) ?>"
-                    data-status="<?= (int)($t['status'] ?? 0) ?>">
+                <tr>
                   <?php if ($C['col_num']): ?>
                     <td class="text-center"><?= $i++ ?></td><?php endif; ?>
                   <?php if ($C['col_desc']): ?>
@@ -905,45 +884,6 @@ $RUNNING_TASK_ID = $runningAny ? (int) $runningAny['id'] : 0;
     unset($_SESSION['flash']);
   }
   ?>
-
-<script>
-(function () {
-  function norm(v){ return (v || '').toString().toLowerCase(); }
-
-  function apply() {
-    var term = norm(document.getElementById('taskSearch')?.value);
-    var fval = (document.getElementById('taskFilter')?.value || 'all');
-    var rows = document.querySelectorAll('tr.task-row');
-    rows.forEach(function(row){
-      var title = norm(row.dataset.title);
-      var notes = norm(row.dataset.notes);
-      var df = norm(row.dataset.datefrom);
-      var dt = norm(row.dataset.dateto);
-      var pr = parseInt(row.dataset.priority || '0', 10);
-      var st = parseInt(row.dataset.status || '0', 10);
-
-      var textMatch = !term || (title + ' ' + notes + ' ' + df + ' ' + dt).indexOf(term) !== -1;
-
-      var filterMatch = true;
-      if (fval === 'pending') filterMatch = (st === 0);
-      else if (fval === 'done') filterMatch = (st === 1);
-      else if (fval === 'p3') filterMatch = (pr === 3);
-      else if (fval === 'p2') filterMatch = (pr === 2);
-      else if (fval === 'p1') filterMatch = (pr === 1);
-
-      row.style.display = (textMatch && filterMatch) ? '' : 'none';
-    });
-  }
-
-  document.addEventListener('DOMContentLoaded', function () {
-    var s = document.getElementById('taskSearch');
-    var f = document.getElementById('taskFilter');
-    if (s) s.addEventListener('input', apply);
-    if (f) f.addEventListener('change', apply);
-    apply();
-  });
-})();
-</script>
 </body>
 
 </html>

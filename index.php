@@ -131,8 +131,7 @@ $currentMonthName = date('F', strtotime("$year-$month-01"));
   include __DIR__ . "/includes/navbar.php";
   
   // ====== MAIN SECTION INCLUDE (uses $year,$month from this scope) ======
-  // include __DIR__ . "/section/main_sec.php";
-  include __DIR__ . "/section/main_sec2.php";
+  include __DIR__ . "/section/main_sec.php";
   ?>
 
 
